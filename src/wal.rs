@@ -4,7 +4,7 @@ use crate::types::BLOCK_MAX_SIZE;
 use crate::types::BLOCK_MIN_FREE_SIZE;
 use crate::types::WAL_LOG_MAX_SIZE;
 use failure::Fallible;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io;
 use std::io::{ErrorKind, Write};
 use std::path::Path;
@@ -20,9 +20,15 @@ pub struct Wal {
 
 impl Wal {
     pub fn new<P: AsRef<Path>>(path: P) -> Self {
+        let file = OpenOptions::new()
+            .write(true)
+            .truncate(true)
+            .create(true)
+            .open(&path)
+            .expect("open file");
         Wal {
-            path: path.as_ref().into(),
-            file: File::open(path).expect("open file"),
+            path: path.as_ref().to_path_buf(),
+            file,
             used: 0,
             current_block_used: 0,
         }
@@ -101,5 +107,27 @@ impl Write for Wal {
 
     fn flush(&mut self) -> io::Result<()> {
         self.file.flush()
+    }
+}
+
+impl Drop for Wal {
+    fn drop(&mut self) {
+        self.flush().expect("flush error");
+    }
+}
+
+
+#[allow(unused_imports)]
+mod tests {
+    use super::*;
+    use spectral::prelude::*;
+
+    #[test]
+    fn test_write_wal() {
+        let mut wal = Wal::new("test.wal");
+        let buf = [1;1000];
+        let records = wal.make_records(&buf);
+        let ret = wal.write_records(records);
+        assert_that(&ret).is_ok().is_empty();
     }
 }
