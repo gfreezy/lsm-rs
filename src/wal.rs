@@ -116,7 +116,6 @@ impl Drop for Wal {
     }
 }
 
-
 #[allow(unused_imports)]
 mod tests {
     use super::*;
@@ -125,9 +124,19 @@ mod tests {
     #[test]
     fn test_write_wal() {
         let mut wal = Wal::new("test.wal");
-        let buf = [1;1000];
+        let buf = [1; 1000];
         let records = wal.make_records(&buf);
         let ret = wal.write_records(records);
         assert_that(&ret).is_ok().is_empty();
+    }
+
+    #[test]
+    fn test_write_wal_overflow() {
+        let mut wal = Wal::new("test.wal");
+        let buf = [1; 5 * 1024 * 1024];
+        let records = wal.make_records(&buf);
+        assert_that(&records).has_length(5 * 1024 / 32);
+        let ret = wal.write_records(records);
+        assert_that(&ret).is_ok().has_length(1024 / 32);
     }
 }
